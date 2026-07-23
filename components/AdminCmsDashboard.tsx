@@ -145,19 +145,13 @@ export function AdminCmsDashboard() {
     setStatus("Syncing stock from POS...");
     const response = await fetch("/api/integrations/pos-stock-sync", {
       method: "POST",
-      headers: {
-        ...headers(),
-      },
+      headers: { ...headers() },
     });
 
     const payload = (await response.json().catch(() => ({}))) as {
       ok?: boolean;
       message?: string;
-      summary?: {
-        matchedCount: number;
-        unmatchedPosSkuCount: number;
-        totalPosProducts: number;
-      };
+      summary?: { matchedCount: number; unmatchedPosSkuCount: number; totalPosProducts: number };
     };
 
     if (!response.ok || !payload.ok) {
@@ -168,6 +162,39 @@ export function AdminCmsDashboard() {
     const summary = payload.summary;
     setStatus(
       `Stock sync complete. Matched ${summary?.matchedCount ?? 0}/${summary?.totalPosProducts ?? 0} POS products. Unmatched SKUs: ${summary?.unmatchedPosSkuCount ?? 0}.`,
+    );
+    await loadProducts();
+  };
+
+  const syncCatalogFromPos = async () => {
+    if (
+      !window.confirm(
+        "This will replace all POS-linked products with the latest data from your POS database. Webshop-only products are kept. Continue?",
+      )
+    ) {
+      return;
+    }
+
+    setStatus("Importing product catalog from POS...");
+    const response = await fetch("/api/integrations/pos-catalog-sync", {
+      method: "POST",
+      headers: { ...headers() },
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      message?: string;
+      summary?: { posProductsImported: number; existingWebshopOnlyProducts: number; totalProducts: number };
+    };
+
+    if (!response.ok || !payload.ok) {
+      setStatus(payload.message ?? "Catalog sync failed.");
+      return;
+    }
+
+    const s = payload.summary;
+    setStatus(
+      `Catalog sync complete. ${s?.posProductsImported ?? 0} POS products imported. ${s?.existingWebshopOnlyProducts ?? 0} webshop-only products kept. Total: ${s?.totalProducts ?? 0}.`,
     );
     await loadProducts();
   };
@@ -382,6 +409,13 @@ export function AdminCmsDashboard() {
             className="rounded-md border border-emerald-300 px-5 py-3 font-semibold text-emerald-700 hover:bg-emerald-50"
           >
             Sync Stock From POS
+          </button>
+          <button
+            type="button"
+            onClick={syncCatalogFromPos}
+            className="rounded-md border border-sky-300 px-5 py-3 font-semibold text-sky-700 hover:bg-sky-50"
+          >
+            Sync Catalog From POS
           </button>
           <button
             type="button"
