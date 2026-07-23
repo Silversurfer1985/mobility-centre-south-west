@@ -1,14 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-
 const DEFAULT_ADMIN_USERNAME = "sales@mobilitycentresouthwest.com";
 const DEFAULT_ADMIN_PASSWORD = "C00perB00ts!";
 
-function parseBasicCredentials(header: string | null) {
-  if (!header?.startsWith("Basic ")) {
+function parseBasicAuthorization(authorizationHeader: string | null) {
+  if (!authorizationHeader?.startsWith("Basic ")) {
     return null;
   }
 
-  const encoded = header.slice(6).trim();
+  const encoded = authorizationHeader.slice(6).trim();
   if (!encoded) {
     return null;
   }
@@ -16,7 +14,6 @@ function parseBasicCredentials(header: string | null) {
   try {
     const decoded = atob(encoded);
     const separatorIndex = decoded.indexOf(":");
-
     if (separatorIndex < 0) {
       return null;
     }
@@ -30,10 +27,10 @@ function parseBasicCredentials(header: string | null) {
   }
 }
 
-function isAuthorizedBasicAuth(request: NextRequest) {
+function hasValidBasicAuthorization(request: Request) {
   const expectedUsername = process.env.ADMIN_BASIC_AUTH_USERNAME ?? DEFAULT_ADMIN_USERNAME;
   const expectedPassword = process.env.ADMIN_BASIC_AUTH_PASSWORD ?? DEFAULT_ADMIN_PASSWORD;
-  const credentials = parseBasicCredentials(request.headers.get("authorization"));
+  const credentials = parseBasicAuthorization(request.headers.get("authorization"));
 
   if (!credentials) {
     return false;
@@ -45,26 +42,16 @@ function isAuthorizedBasicAuth(request: NextRequest) {
   );
 }
 
-function challengeResponse() {
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Basic realm="Admin Area"',
-    },
-  });
-}
-
-export function proxy(request: NextRequest) {
-  if (!isAuthorizedBasicAuth(request)) {
-    return challengeResponse();
+function hasValidAdminToken(request: Request) {
+  const configuredToken = process.env.ORDER_ADMIN_TOKEN;
+  if (!configuredToken) {
+    return false;
   }
 
-  return NextResponse.next();
+  const headerToken = request.headers.get("x-admin-token");
+  return headerToken === configuredToken;
 }
 
-export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/api/cms/:path*",
-  ],
-};
+export function isAuthorizedRequest(request: Request) {
+  return hasValidAdminToken(request) || hasValidBasicAuthorization(request);
+}
